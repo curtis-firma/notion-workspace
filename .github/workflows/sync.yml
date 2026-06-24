@@ -1,0 +1,49 @@
+name: Slack <-> Notion Task Sync
+
+on:
+  schedule:
+    # Every 10 minutes.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run without writing changes"
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: slack-notion-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      # Other config via env with documented defaults.
+      SLACK_LIST_ID: F0BCT37CJ8N
+      NOTION_DATABASE_ID: a53be6ba-4973-824d-ae3f-014a7e3c9c46
+      NOTION_DATA_SOURCE_ID: 25dbe6ba-4973-8217-b64e-071cd79ef4ce
+      CONFLICT_STRATEGY: last-edited-wins
+      # workflow_dispatch boolean input wired to DRY_RUN; empty on schedule.
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run sync
+        run: npm start
