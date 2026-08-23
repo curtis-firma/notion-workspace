@@ -2,8 +2,8 @@ name: Slack <-> Notion Task Sync
 
 on:
   schedule:
-    # Every 10 minutes.
-    - cron: "*/10 * * * *"
+    # Hourly.
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -30,20 +30,37 @@ jobs:
       # workflow_dispatch boolean input wired to DRY_RUN; empty on schedule.
       DRY_RUN: ${{ github.event.inputs.dry_run }}
     steps:
+      # Missing credentials are a config state, not a failure. Skip the run
+      # cleanly instead of failing the job on every scheduled tick.
+      - name: Check credentials
+        id: preflight
+        run: |
+          if [ -z "$SLACK_TOKEN" ] || [ -z "$NOTION_TOKEN" ]; then
+            echo "::notice::SLACK_TOKEN and/or NOTION_TOKEN is not set; skipping sync. Add them under Settings -> Secrets and variables -> Actions."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
+        if: steps.preflight.outputs.ready == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node 20
+        if: steps.preflight.outputs.ready == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
+        if: steps.preflight.outputs.ready == 'true'
         run: npm ci
 
       - name: Build
+        if: steps.preflight.outputs.ready == 'true'
         run: npm run build
 
       - name: Run sync
+        if: steps.preflight.outputs.ready == 'true'
         run: npm start
